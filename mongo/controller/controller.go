@@ -2,10 +2,13 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"mongo/model"
+	"net/http"
 
+	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -40,7 +43,7 @@ func insertOneCourse(course model.Course) {
 	fmt.Println("Inserted a course: ", inserted.InsertedID)
 }
 
-func updateOneCourse(courseId string, course model.Course) {
+func updateOneCourse(courseId string) {
 	id, _ := primitive.ObjectIDFromHex(courseId)
 	filter := bson.M{"_id": id}
 	update := bson.M{"$set": bson.M{"watched": true}};
@@ -69,4 +72,67 @@ func deleteAllCourse(){
 		log.Fatal(err)
 	}
 	fmt.Println("delete all count: ", deleteResult.DeletedCount)
+}
+
+func getAllCourses() []primitive.M{
+	cursor, err := collection.Find(context.Background(), bson.M{})
+
+	if err!=nil {
+		log.Fatal(err)
+	}
+
+	var courses []primitive.M
+	for cursor.Next(context.Background()){
+		var course bson.M
+		err := cursor.Decode(&course)
+
+		if err!=nil {
+			log.Fatal(err)
+		}
+		courses = append(courses, course)
+	}
+	
+	defer cursor.Close(context.Background())
+	return courses
+}
+
+// actual controller that will be imported
+func GetAllCourses(w http.ResponseWriter, r *http.Request){
+	w.Header().Set("Content-Type", "application/x-www-form-urlencode")
+	allMovies := getAllCourses()
+	json.NewEncoder(w).Encode(allMovies)
+}
+func MarkCourseWatched(w http.ResponseWriter, r *http.Request){
+	w.Header().Set("Content-Type", "application/x-www-form-urlencode")
+	w.Header().Set("Allow-Control-Allow-Encode", "POST")
+	
+	params := mux.Vars(r)
+	updateOneCourse(params["id"])
+	json.NewEncoder(w).Encode(params["id"])
+}
+
+func CreateCourse(w http.ResponseWriter, r *http.Request){
+	w.Header().Set("Content-Type", "application/x-www-form-urlencode")
+	w.Header().Set("Allow-Control-Allow-Methods", "POST")
+
+	var course model.Course
+	_ = json.NewDecoder(r.Body).Decode(&course)
+	insertOneCourse(course)
+}
+
+func DeleteOneCourse(w http.ResponseWriter, r *http.Request){
+	w.Header().Set("Content-Type", "application/x-www-form-urlencode")
+	w.Header().Set("Allow-Control-Allow-Encode", "POST")
+	
+	params := mux.Vars(r)
+	deleteOneCourse(params["id"])
+	json.NewEncoder(w).Encode(params["id"])
+}
+
+func DeleteAllCourse(w http.ResponseWriter, r *http.Request){
+	w.Header().Set("Content-Type", "application/x-www-form-urlencode")
+	w.Header().Set("Allow-Control-Allow-Encode", "POST")
+	
+	deleteAllCourse()
+	json.NewEncoder(w).Encode("Deleted all courses!!!")
 }
